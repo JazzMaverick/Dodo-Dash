@@ -1,3 +1,4 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <!doctype html>
 <html lang="en">
 <head>
@@ -67,10 +68,12 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-acti
 .menu .btn:hover{border-color:#fff}
 .btn.primary,.menu .btn.primary{background:#ff5d8f;color:#1a0d2e;border-color:#ff5d8f}
 .btn.small{font-size:14px;padding:8px 12px}
+.btn.active{border-color:var(--mint);box-shadow:inset 0 0 0 1px var(--mint)}
+.menu .btn.active{border-color:#7ef2b0;box-shadow:inset 0 0 0 1px #7ef2b0}
 .btn:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
 h2{margin:0 0 4px;font-size:30px;font-weight:700}
 .sub{margin:0 0 18px;color:var(--muted)}
-.head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px}
+.head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px;flex-wrap:wrap}
 
 .course{display:grid;grid-template-columns:54px 1fr auto;gap:4px 14px;align-items:center;padding:12px 8px;border-top:1px solid var(--line);border-radius:10px;transition:background .25s ease,transform .25s ease}
 .course:hover{background:rgba(128,110,220,.12);transform:translateX(4px)}
@@ -154,15 +157,15 @@ h2{margin:0 0 4px;font-size:30px;font-weight:700}
         <button class="btn" data-go="endless">Endless run</button>
         <button class="btn" data-go="daily">Daily run</button>
         <button class="btn" data-go="how">How to play</button>
-        <button class="btn small" id="muteBtn">Sound: on</button>
+        <div class="row"><button class="btn small easyToggle" aria-pressed="false">Easy mode: off</button><button class="btn small" id="muteBtn">Sound: on</button></div>
       </div>
     </div>
   </section>
 
   <section class="screen" id="s-levels">
     <div class="panel">
-      <div class="head"><h2>Courses</h2><button class="btn small" data-go="menu">Back</button></div>
-      <p class="sub">Practice mode lets you drop checkpoints. Only normal clears count as complete.</p>
+      <div class="head"><h2>Courses</h2><div class="row"><button class="btn small easyToggle" aria-pressed="false">Easy mode: off</button><button class="btn small" data-go="menu">Back</button></div></div>
+      <p class="sub">Easy mode respawns you a moment before each crash. Practice lets you drop checkpoints. Only normal clears count as fully cleared.</p>
       <div id="courseList" class="stagger"></div>
     </div>
   </section>
@@ -193,6 +196,7 @@ h2{margin:0 0 4px;font-size:30px;font-weight:700}
       <dl>
         <dt>Courses</dt><dd>Twelve themed tracks from gentle to brutal.</dd>
         <dt>Practice</dt><dd>C places a checkpoint, X removes the last. Gates add one automatically.</dd>
+        <dt>Easy mode</dt><dd>Crash and you respawn a moment earlier instead of back at the start. Switch it on from the menu or the course list.</dd>
         <dt>Endless</dt><dd>A fresh course every run that keeps speeding up.</dd>
         <dt>Daily run</dt><dd>An endless course that’s the same for everyone today.</dd>
       </dl>
@@ -237,7 +241,7 @@ const RM=!!(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').ma
 
 /* ================= save ================= */
 const SKEY='neon-stride-save-v2';
-let save={levels:{},endless:0,daily:{},muted:false};
+let save={levels:{},endless:0,daily:{},muted:false,easy:false};
 try{const s=localStorage.getItem(SKEY);if(s)save=Object.assign(save,JSON.parse(s));}catch(e){}
 function persist(){try{localStorage.setItem(SKEY,JSON.stringify(save));}catch(e){}}
 function lvSave(i){return save.levels[i]||(save.levels[i]={best:0,pbest:0,done:false,attempts:0});}
@@ -536,7 +540,7 @@ window.addEventListener('resize',resize);
 
 const game={state:'menu',kind:null,li:0,practice:false,objs:[],decos:[],portals:[],segs:[],pi:0,finish:Infinity,p:null,k:1,baseK:1,attempt:1,
   deadT:0,winT:0,intro:0,cps:[],used:new Set(),cam:{x:0,y:-3},parts:[],trail:[],th:TH[0],song:null,eb:null,seed:1,shake:0,runTime:0,
-  flash:0,flashC:'#fff',banner:null,mirror:false,mx:1,pctShow:0,gT:0};
+  flash:0,flashC:'#fff',banner:null,mirror:false,mx:1,pctShow:0,gT:0,easy:false,auto:[],respawns:0,autoT:0};
 const input={held:false,buf:0,pointers:0};
 
 function makePlayer(){return {x:-6,y:0,vy:0,mode:'cube',grav:1,grounded:true,ceil:null,rot:0,ang:0,dead:false,jumpT:0};}
@@ -560,6 +564,7 @@ function startLevel(i,practice,introT){
   const lv=buildLevel(i),def=LEVELS[i];
   Object.assign(game,{kind:'level',li:i,practice,objs:lv.objs,decos:lv.decos,portals:lv.portals,segs:lv.segs,finish:lv.finish,baseK:lv.k0,attempt:1,cps:[],song:makeSong(1000+i*7919,def.bpm),eb:null});
   setTheme(TH[def.th]);
+  game.easy=!!save.easy&&!practice;game.auto=[];game.respawns=0;game.autoT=0;
   const s=lvSave(i);s.attempts++;persist();
   resetRun(null,true);game.intro=introT||0.4;setState('play');
 }
@@ -567,7 +572,7 @@ function startEndless(daily,introT){
   let seed;
   if(daily){const d=new Date();seed=d.getFullYear()*10000+(d.getMonth()+1)*100+d.getDate();}
   else seed=Math.floor(Math.random()*1e9);
-  Object.assign(game,{kind:daily?'daily':'endless',practice:false,seed,baseK:1,attempt:1,cps:[],finish:Infinity,song:makeSong(seed%100000,128)});
+  Object.assign(game,{kind:daily?'daily':'endless',practice:false,easy:false,seed,baseK:1,attempt:1,cps:[],finish:Infinity,song:makeSong(seed%100000,128)});
   setTheme(TH[seed%TH.length]);
   resetRun(null,true);game.intro=introT||0.4;setState('play');
 }
@@ -581,7 +586,7 @@ function resetRun(cp,music){
   const U=unit();game.cam.x=p.x-(W/U)*0.3;
   game.flash=.5;game.flashC='#fff';
   FX.ring(p.x+.5,p.y+.5,'#fff',.3,2.2,.45);
-  if(music||!game.practice)AU.play(game.song);
+  if(music||(!game.practice&&!game.easy))AU.play(game.song);
 }
 const ALLM=Object.keys(MODES);
 function extendEndless(){
@@ -610,10 +615,10 @@ function die(){
   if(!RM)game.shake=0.4;
   game.flash=.55;game.flashC='#fff';
   AU.sfxDeath();
-  if(!game.practice)AU.stop();
+  if(!game.practice&&!game.easy)AU.stop();
   if(game.kind==='level'){
     const s=lvSave(game.li),pct=Math.floor(clamp(p.x/game.finish,0,1)*100);
-    if(game.practice)s.pbest=Math.max(s.pbest,pct);else s.best=Math.max(s.best,pct);persist();
+    if(game.practice)s.pbest=Math.max(s.pbest,pct);else if(!game.easy)s.best=Math.max(s.best,pct);persist();
   }else{
     const dist=Math.max(0,Math.floor(p.x));
     if(game.kind==='endless'){game.newBest=dist>save.endless;save.endless=Math.max(save.endless,dist);}
@@ -624,7 +629,7 @@ function die(){
 function win(){
   const p=game.p;game.winT=1.5;AU.stop();AU.sfxWin();
   const s=lvSave(game.li);
-  if(game.practice)s.pbest=100;else{s.best=100;s.done=true;}
+  if(game.practice)s.pbest=100;else if(game.easy)s.easyDone=true;else{s.best=100;s.done=true;}
   persist();
   game.flash=.7;game.flashC=game.th.edge;
   for(let i=0;i<50;i++){const a=Math.random()*TAU,sp=2+Math.random()*9;game.parts.push({k:0,x:p.x+.5,y:p.y+.5,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:1.2,max:1.2,c:['#46e6ff','#ff5d8f','#ffb547','#b88cff'][i%4],sz:.16,g:8});}
@@ -753,11 +758,13 @@ function tick(dt){
   const P=game.portals;
   while(game.pi<P.length&&P[game.pi].x<=p.x+0.5){enterPortal(P[game.pi]);game.pi++;}
   if(game.kind==='level'&&p.x>=game.finish)win();
+  if(game.easy&&game.winT<=0){game.autoT-=dt;if(game.autoT<=0&&(FLY[p.mode]||p.grounded)){game.auto.push(snapshot());game.autoT=0.3;}}
   if(game.eb)extendEndless();
 }
 function afterDeath(){
   if(game.kind==='level'){
     if(game.practice){resetRun(game.cps[game.cps.length-1]||null,false);}
+    else if(game.easy){const a=game.auto,td=game.runTime;while(a.length&&a[a.length-1].t>td-1.0)a.pop();game.respawns++;resetRun(a[a.length-1]||null,false);game.autoT=0.3;game.intro=RM?.3:.5;input.buf=0;}
     else{game.attempt++;const s=lvSave(game.li);s.attempts++;persist();resetRun(null,true);}
   }else showResult();
 }
@@ -1269,7 +1276,7 @@ function drawHUD(U){
     glow(bx+bw*pct,by+5,16,c,.7);
     cx.fillStyle='#fff';cx.font=font(700,15);cx.textAlign='left';cx.fillText(Math.floor(clamp(p.x/game.finish,0,1)*100)+'%',bx+bw+12,by+10);
     cx.textAlign='center';cx.font=font(600,14);cx.fillStyle='rgba(255,255,255,.85)';
-    cx.fillText(game.practice?`Practice, ${game.cps.length} checkpoint${game.cps.length===1?'':'s'}`:`Attempt ${game.attempt}`,W/2,by+34);
+    cx.fillText(game.practice?`Practice, ${game.cps.length} checkpoint${game.cps.length===1?'':'s'}`:game.easy?`Easy mode, ${game.respawns} respawn${game.respawns===1?'':'s'}`:`Attempt ${game.attempt}`,W/2,by+34);
   }else{
     const dist=Math.max(0,Math.floor(p.x)),best=game.kind==='endless'?save.endless:(save.daily[String(game.seed)]||0);
     cx.fillStyle='#fff';cx.font=font(700,28);cx.fillText(dist+' m',W/2,40);
@@ -1315,7 +1322,7 @@ function toMenu(){transition(()=>{AU.resume();AU.stop();clearRun();setTheme(TH[M
 function toLevels(){transition(()=>{AU.resume();AU.stop();clearRun();renderCourses();setState('levels');show('levels');if(AU.ctx)AU.play(menuSong);});}
 function goLevel(i,practice){
   const L=LEVELS[i],th=TH[L.th];setTheme(th);
-  transition(()=>{AU.stop();startLevel(i,practice,RM?.9:1.9);},{k:`Course ${i+1} of ${LEVELS.length}${practice?', practice':''}`,t:L.name,s:th.n});
+  transition(()=>{AU.stop();startLevel(i,practice,RM?.9:1.9);},{k:`Course ${i+1} of ${LEVELS.length}${practice?', practice':(save.easy?', easy mode':'')}`,t:L.name,s:th.n});
 }
 function goEndless(daily){
   transition(()=>{AU.stop();startEndless(daily,RM?.9:1.9);},{k:daily?'Same course for everyone today':'A new course every run',t:daily?'Daily run':'Endless run',s:'How far can you get?'});
@@ -1334,7 +1341,7 @@ function renderCourses(){
       <div class="meta">
         <span class="pips" aria-label="Difficulty ${pips} of 10">${Array.from({length:10},(_,k)=>`<i class="${k<pips?'on':''}"></i>`).join('')}</span>
         <span class="forms" aria-label="Forms: ${forms.map(f=>MODES[f].name).join(', ')}">${forms.map(f=>`<b title="${MODES[f].name}" style="background:${MODES[f].c}"></b>`).join('')}</span>
-        <span>${s.done?'<span class="done">Cleared</span>':'Best '+s.best+'%'}${s.pbest?`, practice ${s.pbest}%`:''}</span>
+        <span>${s.done?'<span class="done">Cleared</span>':(s.easyDone?'<span class="done">Cleared on easy</span>':'Best '+s.best+'%')}${s.pbest?`, practice ${s.pbest}%`:''}</span>
       </div>`;
     list.appendChild(row);
   });
@@ -1343,7 +1350,7 @@ function pauseGame(){if(game.state!=='play'||busy)return;setState('pause');AU.pa
   $('#pauseInfo').textContent=game.kind==='level'?`${LEVELS[game.li].name}, ${Math.floor(clamp(game.p.x/game.finish,0,1)*100)}%`:`${Math.max(0,Math.floor(game.p.x))} m so far`;show('pause');}
 function resumeGame(){if(game.state!=='pause')return;AU.resume();input.held=false;input.buf=0;game.intro=.35;setState('play');}
 function restartGame(){AU.resume();
-  if(game.kind==='level'){if(game.practice)game.cps=[];else{game.attempt++;const s=lvSave(game.li);s.attempts++;persist();}resetRun(null,true);}
+  if(game.kind==='level'){if(game.practice)game.cps=[];else{game.attempt++;const s=lvSave(game.li);s.attempts++;persist();}game.auto=[];game.respawns=0;game.autoT=0;resetRun(null,true);}
   else{resetRun(null,true);}
   input.held=false;input.buf=0;game.intro=.35;setState('play');}
 function countUp(el,to,suffix,dec){const t0=performance.now(),d=RM?1:700;const f=now=>{const k=clamp((now-t0)/d,0,1),e=1-Math.pow(1-k,3);el.textContent=(to*e).toFixed(dec||0)+suffix;if(k<1)requestAnimationFrame(f);};requestAnimationFrame(f);}
@@ -1353,9 +1360,10 @@ function showResult(){
   const stat=(val,suffix,label,dec)=>{const d=document.createElement('div'),st=document.createElement('strong'),sp=document.createElement('span');sp.textContent=label;d.append(st,sp);$('#resStats').appendChild(d);countUp(st,val,suffix,dec);};
   $('#resStats').innerHTML='';
   if(game.kind==='level'){
-    $('#resTitle').textContent=game.practice?'Practice run complete':'Course clear';
-    $('#resSub').textContent=LEVELS[game.li].name+(game.practice?'. Clear it in normal mode to mark it done.':'.');
+    $('#resTitle').textContent=game.practice?'Practice run complete':game.easy?'Course clear on easy':'Course clear';
+    $('#resSub').textContent=LEVELS[game.li].name+(game.practice?'. Clear it in normal mode to mark it done.':game.easy?'. Turn easy mode off to clear it fully.':'.');
     if(game.practice)stat(game.cps.length,'','checkpoints used');
+    else if(game.easy){stat(game.respawns,'',game.respawns===1?'respawn':'respawns');stat(game.runTime,'s','course time',1);}
     else{stat(game.attempt,'',game.attempt===1?'attempt':'attempts');stat(game.runTime,'s','final run',1);}
     if(game.li<LEVELS.length-1)btn('Next course',()=>goLevel(game.li+1,false),true);
     btn('Play again',()=>goLevel(game.li,game.practice),game.li===LEVELS.length-1);
@@ -1373,8 +1381,8 @@ function showResult(){
 
 /* ================= input ================= */
 function press(){
-  if(game.state!=='play'||game.intro>0)return;
-  if(!input.held){input.buf=0.12;const p=game.p;if(p&&!p.dead)FX.ring(p.x+.5,p.y+.5,'#fff',.45,.85,.16);}
+  if(game.state!=='play')return;
+  if(!input.held&&game.intro<=0){input.buf=0.12;const p=game.p;if(p&&!p.dead)FX.ring(p.x+.5,p.y+.5,'#fff',.45,.85,.16);}
   input.held=true;
 }
 function release(){input.held=false;}
@@ -1419,6 +1427,10 @@ const muteBtn=$('#muteBtn');
 const syncMute=()=>muteBtn.textContent='Sound: '+(save.muted?'off':'on');
 muteBtn.addEventListener('click',()=>{AU.setMuted(!save.muted);syncMute();});
 syncMute();
+const easyBtns=document.querySelectorAll('.easyToggle');
+const syncEasy=()=>easyBtns.forEach(b=>{b.textContent='Easy mode: '+(save.easy?'on':'off');b.setAttribute('aria-pressed',save.easy?'true':'false');b.classList.toggle('active',!!save.easy);});
+easyBtns.forEach(b=>b.addEventListener('click',()=>{save.easy=!save.easy;persist();syncEasy();}));
+syncEasy();
 
 /* ================= loop ================= */
 resize();setTheme(TH[Math.floor(Math.random()*TH.length)]);
@@ -1432,9 +1444,11 @@ function frame(now){
   updateVisual(dt);draw();requestAnimationFrame(frame);
 }
 show('menu');
-window.__ns={game,input,tick,LEVELS,startLevel,startEndless,PHY,TH,frame,draw,updateVisual};
+window.__ns={game,input,save,tick,LEVELS,startLevel,startEndless,PHY,TH,frame,draw,updateVisual};
 requestAnimationFrame(frame);
 })();
 </script>
 </body>
 </html>
+
+</body></html>
